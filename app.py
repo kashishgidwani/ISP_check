@@ -41,6 +41,24 @@ warnings.filterwarnings(
     message="All-NaN slice encountered",
 )
 
+def secret_get(key: str):
+    """
+    Fetch a secret from Streamlit Secrets.
+    Supports both top-level keys and keys nested under a TOML section (e.g. [general]).
+    """
+    if not hasattr(st, "secrets"):
+        return None
+    try:
+        if key in st.secrets:
+            return st.secrets[key]
+        # Support nested sections: iterate dict-like values
+        for _, v in st.secrets.items():
+            if isinstance(v, dict) and key in v:
+                return v[key]
+    except Exception:
+        return None
+    return None
+
 from config import (
     CF_WORKER_URL,
     CF_SECRET_TOKEN,
@@ -55,10 +73,9 @@ from config import (
 )
 
 # Override from Streamlit Secrets when deployed (e.g. Community Cloud)
-if hasattr(st, "secrets") and st.secrets:
-    SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", SPREADSHEET_ID)
-    CF_WORKER_URL = st.secrets.get("CF_WORKER_URL", CF_WORKER_URL)
-    CF_SECRET_TOKEN = st.secrets.get("CF_SECRET_TOKEN", CF_SECRET_TOKEN)
+SPREADSHEET_ID = secret_get("SPREADSHEET_ID") or SPREADSHEET_ID
+CF_WORKER_URL = secret_get("CF_WORKER_URL") or CF_WORKER_URL
+CF_SECRET_TOKEN = secret_get("CF_SECRET_TOKEN") or CF_SECRET_TOKEN
 
 # ══════════════════════════════════════════════════════════════
 # PAGE CONFIG & CSS
@@ -163,17 +180,25 @@ def _get_credentials():
         "https://www.googleapis.com/auth/drive",
     ]
     # Cloud deploy: use secrets if set (paste full JSON from credentials.json)
-    if hasattr(st, "secrets") and st.secrets:
-        raw = st.secrets.get("GOOGLE_CREDENTIALS_JSON")
-        if raw:
-            try:
-                info = raw if isinstance(raw, dict) else json.loads(raw)
-                return Credentials.from_service_account_info(info, scopes=scopes), None
-            except Exception as exc:
-                return None, f"Invalid GOOGLE_CREDENTIALS_JSON in secrets: {exc}"
+    raw = (
+        secret_get("GOOGLE_CREDENTIALS_JSON")
+        or secret_get("GOOGLE_SERVICE_ACCOUNT_JSON")
+        or secret_get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    )
+    if raw:
+        try:
+            info = raw if isinstance(raw, dict) else json.loads(str(raw).strip())
+            return Credentials.from_service_account_info(info, scopes=scopes), None
+        except Exception as exc:
+            return None, f"Invalid Google credentials secret JSON: {exc}"
     # Local: use file
     if not os.path.exists(CREDENTIALS_FILE):
-        return None, f"credentials.json not found at {os.path.abspath(CREDENTIALS_FILE)}"
+        return (
+            None,
+            "Google credentials not found. On Streamlit Cloud, set Secrets key "
+            "`GOOGLE_CREDENTIALS_JSON` (paste full credentials.json). "
+            f"Local path missing: {os.path.abspath(CREDENTIALS_FILE)}",
+        )
     try:
         creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=scopes)
         return creds, None
