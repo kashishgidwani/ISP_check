@@ -1,0 +1,29 @@
+# Virtual env
+venv/
+.venv/
+env/
+.env.local
+
+# Env / secrets (keep .env out of git)
+.env
+
+# Google credentials (never commit)
+credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo

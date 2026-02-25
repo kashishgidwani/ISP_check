@@ -1,0 +1,10 @@
+streamlit
+gspread
+google-auth
+pandas
+plotly
+pillow
+requests
+python-dotenv
+ultralytics
+statsmodels
